@@ -5,93 +5,133 @@ import torch
 import torch.nn as nn
 from timm.layers.drop import DropPath
 
-class Attention(nn.Module):
-    def __init__(self,
-                 dim,   # 输入token的dim
-                 num_heads=8,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 attn_drop_ratio=0.,
-                 proj_drop_ratio=0.):
-        super(Attention, self).__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop_ratio)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop_ratio)
-
-    def forward(self, x):
-        # [batch_size, num_patches + 1, total_embed_dim]
-        B, N, C = x.shape
-
-        # qkv(): -> [batch_size, num_patches + 1, 3 * total_embed_dim]
-        # reshape: -> [batch_size, num_patches + 1, 3, num_heads, embed_dim_per_head]
-        # permute: -> [3, batch_size, num_heads, num_patches + 1, embed_dim_per_head]
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        # [batch_size, num_heads, num_patches + 1, embed_dim_per_head]
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
-
-        # transpose: -> [batch_size, num_heads, embed_dim_per_head, num_patches + 1]
-        # @: multiply -> [batch_size, num_heads, num_patches + 1, num_patches + 1]
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        # @: multiply -> [batch_size, num_heads, num_patches + 1, embed_dim_per_head]
-        # transpose: -> [batch_size, num_patches + 1, num_heads, embed_dim_per_head]
-        # reshape: -> [batch_size, num_patches + 1, total_embed_dim]
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
-
-
 class Mlp(nn.Module):
-    """
-    MLP as used in Vision Transformer, MLP-Mixer and related networks
-    """
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
         self.fc1 = nn.Linear(in_features, hidden_features)
+        self.dwconv = DWConv(hidden_features)
         self.act = act_layer()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
+        self.linear = linear
+        if self.linear:
+            self.relu = nn.ReLU(inplace=True)
+        
 
-    def forward(self, x):
+    def forward(self, x, H, W):
         x = self.fc1(x)
+        if self.linear:
+            x = self.relu(x)
+        x = self.dwconv(x, H, W)
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
         x = self.drop(x)
         return x
 
+
+
+class Attention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, linear=False):
+        super().__init__()
+        assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
+
+        self.dim = dim
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim ** -0.5
+
+        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.linear = linear
+        self.sr_ratio = sr_ratio
+        if not linear:
+            if sr_ratio > 1:
+                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+                self.norm = nn.LayerNorm(dim)
+        else:
+            self.pool = nn.AdaptiveAvgPool2d(7)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1)
+            self.norm = nn.LayerNorm(dim)
+            self.act = nn.GELU()
+        
+
+
+    def forward(self, x, H, W):
+        B, N, C = x.shape
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+
+        if not self.linear:
+            if self.sr_ratio > 1:
+                x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+                x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
+                x_ = self.norm(x_)
+                kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            else:
+                kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        else:
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+            x_ = self.sr(self.pool(x_)).reshape(B, C, -1).permute(0, 2, 1)
+            x_ = self.norm(x_)
+            x_ = self.act(x_)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        k, v = kv[0], kv[1]
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+
+        return x
+
+class DWConv(nn.Module):
+    def __init__(self, dim=768):
+        super(DWConv, self).__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x, H, W):
+       
+        B, N, C = x.shape
+        x = x.transpose(1, 2).view(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
+
+        return x
 class Block(nn.Module):
-    def __init__(self,
-                 dim,
-                 num_heads,
-                 mlp_ratio=4.,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 drop_ratio=0.,
-                 attn_drop_ratio=0.,
-                 drop_path_ratio=0.,
-                 act_layer=nn.GELU,
-                 norm_layer=nn.LayerNorm):
-        super(Block, self).__init__()
+
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
+        super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                              attn_drop_ratio=attn_drop_ratio, proj_drop_ratio=drop_ratio)
+        self.attn = Attention(
+            dim,
+            num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+            attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio, linear=linear)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path_ratio) if drop_path_ratio > 0. else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop, linear=linear)
+        #self.mlp = Mlp(in_features=dim, hidden_features=int(dim/4))
+
+
+        
 
     def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        
+        H = int(x.shape[1]**0.5)
+        W = H
+        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
+        
+        x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
+       
         return x
