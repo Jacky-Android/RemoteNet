@@ -26,6 +26,7 @@ class OverlapPatchEmbed(nn.Module):
 
     def forward(self, x):
         x = self.proj(x)
+        
         _, _, H, W = x.shape
         x = x.flatten(2).transpose(1, 2)
         x = self.norm(x)
@@ -34,11 +35,11 @@ class OverlapPatchEmbed(nn.Module):
 
 
 class stage(nn.Module):
-    def __init__(self, stride=4, in_chans=3, embed_dim=768,depth=3,drop_path_ratio=0,num_heads=8):
+    def __init__(self, stride=4, in_chans=3, embed_dim=768,depth=3,drop_path_ratio=0,num_heads=8,sr_ratio=8):
         super().__init__()
         self.path_embeding = OverlapPatchEmbed(embed_dim=embed_dim,stride=stride,in_chans=in_chans)
-        dpr = [x.item() for x in torch.linspace(0, drop_path_ratio, depth)]
-        self.blocks = nn.Sequential(*[Block(dim=embed_dim,drop_path_ratio=dpr[i],num_heads=num_heads)
+        
+        self.blocks = nn.Sequential(*[Block(dim=embed_dim,num_heads=num_heads,sr_ratio=sr_ratio)
                                     for i in range(depth)
                                     ])
         
@@ -49,12 +50,12 @@ class stage(nn.Module):
         return x
     
 class Encoder(nn.Module):
-    def __init__(self, img_size=1024, in_chans=3, depths=(3,4,6,3),dims = (32,64,160,256)):
+    def __init__(self, in_chans=3, depths=(3,4,6,3),dims = (32,64,160,256)):
         super().__init__()
-        self.stage1 = stage(embed_dim=dims[0],depth=depths[0],in_chans=in_chans)
-        self.stage2 = stage(embed_dim=dims[1],depth=depths[1],in_chans=dims[0],stride=2)
-        self.stage3 = stage(embed_dim=dims[2],depth=depths[2],in_chans=dims[1],stride=2)
-        self.stage4 = stage(embed_dim=dims[3],depth=depths[3],in_chans=dims[2],stride=2)
+        self.stage1 = stage(embed_dim=dims[0],depth=depths[0],in_chans=in_chans,num_heads=1,sr_ratio=8)
+        self.stage2 = stage(embed_dim=dims[1],depth=depths[1],in_chans=dims[0],stride=2,num_heads=2,sr_ratio=4)
+        self.stage3 = stage(embed_dim=dims[2],depth=depths[2],in_chans=dims[1],stride=2,num_heads=4,sr_ratio=2)
+        self.stage4 = stage(embed_dim=dims[3],depth=depths[3],in_chans=dims[2],stride=2,num_heads=8,sr_ratio=1)
         
     def forward(self, x):
         
@@ -63,4 +64,6 @@ class Encoder(nn.Module):
         stage3 = self.stage3(stage2)
         stage4 = self.stage4(stage3)
         return stage1,stage2,stage3,stage4
+    
+
     
