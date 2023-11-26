@@ -145,7 +145,7 @@ class Fusion(nn.Module):
                                            nn.LeakyReLU(),
                                            nn.AdaptiveAvgPool2d(1),
                                            nn.Conv2d(decode_channels, decode_channels, kernel_size=1),
-                                           #nn.BatchNorm2d(decode_channels),
+                                           nn.BatchNorm2d(num_features=decode_channels),
                                            nn.Sigmoid()
                                            )
         self.CNN = ConvBNReLU(decode_channels,decode_channels)
