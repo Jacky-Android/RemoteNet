@@ -5,6 +5,16 @@ Because the original paper does not have open source code, I tried to reproduce 
 ## This project reproduces this paper
 # Major changes
 😒😒😒 Although the paper does not say it, the Encoder is [pvt_v2](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/pvt_v2.py),so the code was modified!!!😢😢
+# Environment
+```python
+torch==2.1.1+cu118
+torchaudio==2.1.1+cu118
+torchinfo==1.8.0
+torchvision==0.16.1
+requests==2.28.1
+urllib3== 1.25.11
+timm==0.9.0 #It must be ensured that timm is this version!!!
+```
 # Model summary
 ```python
 ==============================================================================================================
