@@ -1,4 +1,4 @@
-# RemoteNet
+# RemoteNet: Remote Sensing Image Segmentation Network based on Global-Local Information
 Paper:[RemoteNet: Remote Sensing Image Segmentation Network based on Global-Local Information](https://arxiv.org/abs/2302.13084)
 
 Because the original paper does not have open source code, I tried to reproduce it.
