@@ -16,6 +16,7 @@ urllib3== 1.25.11
 timm==0.9.0 #It must be ensured that timm is this version!!!
 ```
 # Model summary
+
 ```python
 ==============================================================================================================
 Layer (type:depth-idx)                                       Output Shape              Param #
