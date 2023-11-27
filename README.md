@@ -16,6 +16,15 @@ requests==2.28.1
 urllib3== 1.25.11
 timm==0.9.0 #It must be ensured that timm is this version!!!
 ```
+# Train
+```python
+python train.py
+Modify the path before this
+train_dataset = PotsdamDataset(data_root='potsdam', mode='train',img_dir='images/train', mask_dir='anns/train',
+                                   mosaic_ratio=0.25, transform=train_aug)
+
+val_dataset = PotsdamDataset(data_root='potsdam',img_dir='images/val', mask_dir='anns/val',transform=val_aug)
+```
 # Postdam cut as 1024
 [https://www.123pan.com/s/YnBgjv-D8j1H.html](https://www.123pan.com/s/YnBgjv-D8j1H.html)提取码:pots
 
