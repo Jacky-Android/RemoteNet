@@ -17,6 +17,7 @@ urllib3== 1.25.11
 timm==0.9.0 #It must be ensured that timm is this version!!!
 ```
 # Model summary
+![image](https://github.com/Jacky-Android/RemoteNet/assets/55181594/a44b9c32-5aea-49ec-a206-fb5bb91878fb)
 
 ```python
 ==============================================================================================================
