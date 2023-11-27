@@ -4,7 +4,7 @@ Paper:[RemoteNet: Remote Sensing Image Segmentation Network based on Global-Loca
 Because the original paper does not have open source code, I tried to reproduce it.
 ## This project reproduces this paper
 # Major changes
-😒😒😒 Although the paper does not say it, the Encoder is [pvt_v2](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/pvt_v2.py),so the code was modified!!!😢😢
+😒😒😒 Although the paper does not say it, the Encoder is [PVT_v2](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/pvt_v2.py),so the code was modified!!!😢😢
 
 # Environment
 ```python
@@ -16,6 +16,9 @@ requests==2.28.1
 urllib3== 1.25.11
 timm==0.9.0 #It must be ensured that timm is this version!!!
 ```
+# Postdam cut as 1024
+[https://www.123pan.com/s/YnBgjv-D8j1H.html](https://www.123pan.com/s/YnBgjv-D8j1H.html)提取码:pots
+
 # Model summary
 ![image](https://github.com/Jacky-Android/RemoteNet/assets/55181594/a44b9c32-5aea-49ec-a206-fb5bb91878fb)
 
