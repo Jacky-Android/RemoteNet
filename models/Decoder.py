@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from .CNNs import ConvBN, SeparableConvBN, Conv,SeparableConvBN,ConvBNReLU,SeparableConvBNReLU
 from timm.layers.drop import DropPath
 
+
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.ReLU6, drop=0.):
         super().__init__()
@@ -84,7 +85,7 @@ class GlobalLocalAttention(nn.Module):
         B, C, Hp, Wp = x.shape
         
         qkv = self.qkv(x)
-        qkv = qkv.view(B, Hp // self.ws, self.ws, Wp // self.ws, self.ws, 3*C).permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, self.ws, self.ws, 3*C)
+        qkv = qkv.contiguous().view(B, Hp // self.ws, self.ws, Wp // self.ws, self.ws, 3*C).permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, self.ws, self.ws, 3*C)
         q, k, v = qkv.reshape(qkv.shape[0], self.ws*self.ws,3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         dots = (q @ k.transpose(-2, -1)) * self.scale
         
@@ -187,24 +188,27 @@ class Decoder(nn.Module):
     def __init__(self, dim = 64,dims = (32,64,160,256),num_classes=6):
         super().__init__()
         self.preconv = nn.Conv2d(dims[-1], dim, kernel_size=1, stride=1, padding=0)
-        self.block = Block(dim=dim, num_heads=8, mlp_ratio=4, qkv_bias=True)
+        self.block4 = Block(dim=dim, num_heads=8, mlp_ratio=4, qkv_bias=True)
         self.F1 = Fusion(in_channels=dims[-2],decode_channels=dim)
+        self.block3 = Block(dim=dim, num_heads=8, mlp_ratio=4, qkv_bias=True)
         self.F2 = Fusion(in_channels=dims[-3],decode_channels=dim)
+        self.block2 = Block(dim=dim, num_heads=8, mlp_ratio=4, qkv_bias=True)
         self.F3 = Fusion(in_channels=dims[-4],decode_channels=dim)
         self.FRM = FRM(dim,num_classes=num_classes)
 
     def forward(self, stage1,stage2,stage3,stage4):
 
         x = self.preconv(stage4)
-        x = self.block(x)
+        x = self.block4(x)
         x = self.F1(x,stage3)
-        x = self.block(x)
+        x = self.block3(x)
         x = self.F2(x,stage2)
-        x = self.block(x)
+        x = self.block2(x)
         x = self.F3(x,stage1)
 
         x = self.FRM(x)
         return x
+
 
 
    
