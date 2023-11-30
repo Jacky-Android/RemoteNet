@@ -27,7 +27,7 @@ val_dataset = PotsdamDataset(data_root='potsdam',img_dir='images/val', mask_dir=
 ```
 # Postdam cut as 1024
 [https://www.123pan.com/s/YnBgjv-D8j1H.html](https://www.123pan.com/s/YnBgjv-D8j1H.html)提取码:pots
-
+[https://drive.google.com/file/d/1NWLLVlUVaIZYwePbPx7Ca60AdyW-cdMT/view?usp=sharing](https://drive.google.com/file/d/1NWLLVlUVaIZYwePbPx7Ca60AdyW-cdMT/view?usp=sharing)
 # Model summary
 ![image](https://github.com/Jacky-Android/RemoteNet/assets/55181594/a44b9c32-5aea-49ec-a206-fb5bb91878fb)
 
